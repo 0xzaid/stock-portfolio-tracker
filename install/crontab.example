@@ -1,0 +1,31 @@
+# Portfolio Tracker - Daily Automation
+# Add these lines to your crontab with: crontab -e
+
+# Daily portfolio analysis at 9:00 AM (after market open)
+0 9 * * 1-5 cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py >> data/logs/cron.log 2>&1
+
+# Daily portfolio analysis at 4:30 PM (after market close) - main report
+30 16 * * 1-5 cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py >> data/logs/cron.log 2>&1
+
+# Weekly portfolio summary on Sunday at 10:00 AM
+0 10 * * 0 cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py --weekly >> data/logs/cron.log 2>&1
+
+# System health check daily at 8:00 AM
+0 8 * * * cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py --test >> data/logs/cron.log 2>&1
+
+# Examples for different schedules:
+# Every 30 minutes during market hours (9:30 AM - 4:00 PM, Mon-Fri):
+# */30 9-16 * * 1-5 cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py >> data/logs/cron.log 2>&1
+
+# Once per hour during market hours:
+# 0 9-16 * * 1-5 cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py >> data/logs/cron.log 2>&1
+
+# Custom schedule - twice daily (morning and evening):
+# 0 9,17 * * 1-5 cd /home/pi/stock-portfolio-tracker && /usr/bin/python3 daily_tracker.py >> data/logs/cron.log 2>&1
+
+# Notes:
+# - Adjust the path /home/pi/stock-portfolio-tracker to your actual project location
+# - 1-5 means Monday to Friday (weekdays only)
+# - Logs are saved to data/logs/cron.log
+# - Use 'crontab -l' to view current cron jobs
+# - Use 'crontab -e' to edit cron jobs
