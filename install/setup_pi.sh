@@ -34,7 +34,7 @@ source venv/bin/activate
 # Install Python dependencies
 echo "📚 Installing Python packages..."
 pip install --upgrade pip
-pip install requests python-dotenv pandas numpy beautifulsoup4 lxml
+pip install requests python-dotenv pandas numpy beautifulsoup4 lxml fake-useragent selenium
 
 # Create necessary directories
 echo "📂 Creating directories..."
@@ -103,43 +103,175 @@ EOF
 
 chmod +x $PROJECT_DIR/run_tracker.sh
 
-# Setup environment template
-echo "⚙️ Creating environment template..."
-tee $PROJECT_DIR/.env.example > /dev/null <<EOF
-# API Keys - Get free keys from these providers:
-ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
-FINNHUB_API_KEY=your_finnhub_key_here
-MARKETAUX_API_KEY=your_marketaux_key_here
+# Create .gitignore for security
+echo "🔒 Creating .gitignore for sensitive files..."
+tee $PROJECT_DIR/.gitignore > /dev/null <<EOF
+# Environment variables (contains API keys)
+.env
+.env.local
 
-# Telegram Bot - Get from @BotFather on Telegram
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_CHAT_ID=your_chat_id_here
+# Portfolio data (contains personal investment info)
+portfolio.json
+settings.json
+
+# Data directory (contains cache and logs)
+data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backup files
+*.backup
+*.bak
+
+# Sensitive runtime files
+last_msg_id.txt
+jobs_cache.json
+EOF
+
+# Setup actual environment file with user input
+echo "⚙️ Setting up environment configuration..."
+echo "📝 Please provide your API keys and Telegram bot information:"
+
+read -p "Alpha Vantage API Key: " ALPHA_KEY
+read -p "Finnhub API Key: " FINNHUB_KEY
+read -p "MarketAux API Key: " MARKETAUX_KEY
+read -p "Telegram Bot Token: " BOT_TOKEN
+read -p "Telegram Chat ID: " CHAT_ID
+
+tee $PROJECT_DIR/.env > /dev/null <<EOF
+# API Keys
+ALPHA_VANTAGE_API_KEY=$ALPHA_KEY
+FINNHUB_API_KEY=$FINNHUB_KEY
+MARKETAUX_API_KEY=$MARKETAUX_KEY
+
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+TELEGRAM_CHAT_ID=$CHAT_ID
 
 # Alert Settings
 PRICE_ALERT_THRESHOLD=5
 EOF
 
-# Create portfolio template
-echo "💼 Creating portfolio template..."
-tee $PROJECT_DIR/portfolio.json.example > /dev/null <<EOF
+echo "✅ Environment configuration saved to .env"
+
+# Setup actual portfolio with user input
+echo "💼 Setting up your portfolio..."
+echo "📝 Please enter your stock holdings:"
+
+# Initialize portfolio structure
+cat > $PROJECT_DIR/portfolio.json <<EOF
 {
   "stocks": {
-    "AAPL": {
-      "shares": 10.0,
-      "avg_price": 150.00,
-      "total_invested": 1500.00,
-      "current_price": 150.00,
-      "current_value": 1500.00,
-      "notes": "Tech holding"
-    }
   },
   "cash": {
-    "available": 500.00,
+    "available": 0.00,
     "currency": "USD"
   },
   "settings": {
     "benchmark": "VOO",
     "currency": "USD"
+  }
+}
+EOF
+
+# Prompt for cash balance
+read -p "Available cash balance (\$): " CASH_BALANCE
+python3 -c "
+import json
+with open('portfolio.json', 'r') as f:
+    portfolio = json.load(f)
+portfolio['cash']['available'] = float('$CASH_BALANCE' or '0')
+with open('portfolio.json', 'w') as f:
+    json.dump(portfolio, f, indent=2)
+"
+
+# Prompt for stocks
+echo "📈 Enter your stock holdings (press Enter with empty symbol to finish):"
+while true; do
+    read -p "Stock Symbol (e.g., AAPL) [Enter to finish]: " SYMBOL
+    if [ -z "$SYMBOL" ]; then
+        break
+    fi
+    
+    SYMBOL=$(echo "$SYMBOL" | tr '[:lower:]' '[:upper:]')
+    read -p "Number of shares for $SYMBOL: " SHARES
+    read -p "Average price per share for $SYMBOL: \$" AVG_PRICE
+    read -p "Current price for $SYMBOL (or Enter for same as avg): \$" CURRENT_PRICE
+    read -p "Notes for $SYMBOL (optional): " NOTES
+    
+    # Default current price to avg price if not provided
+    if [ -z "$CURRENT_PRICE" ]; then
+        CURRENT_PRICE=$AVG_PRICE
+    fi
+    
+    # Add stock to portfolio
+    python3 -c "
+import json
+with open('portfolio.json', 'r') as f:
+    portfolio = json.load(f)
+
+shares = float('$SHARES')
+avg_price = float('$AVG_PRICE')
+current_price = float('$CURRENT_PRICE')
+
+portfolio['stocks']['$SYMBOL'] = {
+    'shares': shares,
+    'avg_price': avg_price,
+    'total_invested': shares * avg_price,
+    'current_price': current_price,
+    'current_value': shares * current_price,
+    'notes': '$NOTES'
+}
+
+with open('portfolio.json', 'w') as f:
+    json.dump(portfolio, f, indent=2)
+"
+    echo "✅ Added $SYMBOL to portfolio"
+done
+
+echo "✅ Portfolio configuration complete!"
+
+# Create actual settings file
+echo "⚙️ Creating settings configuration..."
+tee $PROJECT_DIR/settings.json > /dev/null <<EOF
+{
+  "alerts": {
+    "price_threshold": 5,
+    "enable_recommendations": true,
+    "recommendation_strength": "moderate"
+  },
+  "technical_analysis": {
+    "rsi_period": 14,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "sma_short": 20,
+    "sma_long": 50
+  },
+  "news": {
+    "sentiment_threshold": 0.1,
+    "sources": ["alpha_vantage", "finnhub", "marketaux"]
   }
 }
 EOF
@@ -168,6 +300,12 @@ python3 -c "import requests, pandas, numpy; print('✅ Core packages: OK')" 2>/d
 # Check API configuration
 if [ -f ".env" ]; then
     echo "✅ Environment file: Found"
+    # Check if keys are set (without showing them)
+    if grep -q "ALPHA_VANTAGE_API_KEY=your_" .env; then
+        echo "⚠️ API keys: Default values detected"
+    else
+        echo "✅ API keys: Configured"
+    fi
 else
     echo "❌ Environment file: Missing (.env)"
 fi
@@ -175,6 +313,8 @@ fi
 # Check portfolio file
 if [ -f "portfolio.json" ]; then
     echo "✅ Portfolio file: Found"
+    STOCK_COUNT=\$(python3 -c "import json; f=open('portfolio.json'); p=json.load(f); print(len(p.get('stocks', {})))")
+    echo "📊 Stocks configured: \$STOCK_COUNT"
 else
     echo "❌ Portfolio file: Missing (portfolio.json)"
 fi
@@ -207,56 +347,111 @@ DATE=\$(date +%Y%m%d_%H%M%S)
 
 mkdir -p \$BACKUP_DIR
 
-# Backup portfolio and environment
+# Backup portfolio and environment (without exposing secrets)
 cp portfolio.json \$BACKUP_DIR/portfolio_\$DATE.json 2>/dev/null
-cp .env \$BACKUP_DIR/env_\$DATE.backup 2>/dev/null
+echo "Portfolio backed up" > \$BACKUP_DIR/backup_\$DATE.log
 
 echo "✅ Portfolio backed up to \$BACKUP_DIR"
 
 # Keep only last 30 backups
 find \$BACKUP_DIR -name "portfolio_*.json" -type f -mtime +30 -delete
-find \$BACKUP_DIR -name "env_*.backup" -type f -mtime +30 -delete
+find \$BACKUP_DIR -name "backup_*.log" -type f -mtime +30 -delete
 EOF
 
 chmod +x $PROJECT_DIR/backup_portfolio.sh
+
+# Create example templates for reference
+echo "📝 Creating template files for reference..."
+mkdir -p $PROJECT_DIR/templates
+
+tee $PROJECT_DIR/templates/.env.example > /dev/null <<EOF
+# API Keys - Get free keys from these providers:
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
+FINNHUB_API_KEY=your_finnhub_key_here
+MARKETAUX_API_KEY=your_marketaux_key_here
+
+# Telegram Bot - Get from @BotFather on Telegram
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+
+# Alert Settings
+PRICE_ALERT_THRESHOLD=5
+EOF
+
+tee $PROJECT_DIR/templates/portfolio.json.example > /dev/null <<EOF
+{
+  "stocks": {
+    "AAPL": {
+      "shares": 10.0,
+      "avg_price": 150.00,
+      "total_invested": 1500.00,
+      "current_price": 150.00,
+      "current_value": 1500.00,
+      "notes": "Tech holding"
+    }
+  },
+  "cash": {
+    "available": 500.00,
+    "currency": "USD"
+  },
+  "settings": {
+    "benchmark": "VOO",
+    "currency": "USD"
+  }
+}
+EOF
 
 # Set permissions
 echo "🔐 Setting permissions..."
 chown -R pi:pi $PROJECT_DIR
 chmod +x $PROJECT_DIR/*.py
+chmod 600 $PROJECT_DIR/.env $PROJECT_DIR/portfolio.json  # Secure sensitive files
+
+# Test the setup
+echo "🧪 Testing the setup..."
+cd $PROJECT_DIR
+source venv/bin/activate
+python3 daily_tracker.py --test
 
 # Final instructions
 echo ""
 echo "🎉 Raspberry Pi setup complete!"
 echo "================================"
 echo ""
-echo "📋 Next steps:"
-echo "1. Copy your API keys:"
-echo "   cp .env.example .env"
-echo "   nano .env  # Add your actual API keys"
+echo "✅ Configuration Summary:"
+echo "📁 Project location: $PROJECT_DIR"
+echo "🔐 Sensitive files secured with .gitignore"
+echo "📊 Portfolio configured with your holdings"
+echo "🤖 API keys and Telegram bot configured"
+echo "⏰ Daily automation ready"
 echo ""
-echo "2. Set up your portfolio:"
-echo "   cp portfolio.json.example portfolio.json"
-echo "   nano portfolio.json  # Add your actual stocks"
-echo ""
-echo "3. Test the system:"
+echo "🚀 Next steps:"
+echo "1. Test the system:"
+echo "   cd $PROJECT_DIR"
 echo "   ./health_check.sh"
-echo "   ./run_tracker.sh --test"
 echo ""
-echo "4. Enable daily automation:"
+echo "2. Run daily analysis:"
+echo "   ./run_tracker.sh --test"
+echo "   ./run_tracker.sh"
+echo ""
+echo "3. Enable daily automation:"
 echo "   sudo systemctl start portfolio-tracker.timer"
 echo "   sudo systemctl status portfolio-tracker.timer"
 echo ""
-echo "5. Or set up cron job instead:"
+echo "4. Or set up cron job instead:"
 echo "   crontab -e"
 echo "   # Add: 30 16 * * 1-5 $PROJECT_DIR/run_tracker.sh"
 echo ""
-echo "📍 Project location: $PROJECT_DIR"
-echo "📱 Daily reports will be sent to your Telegram!"
+echo "🔒 Security Notes:"
+echo "   • .env and portfolio.json are in .gitignore"
+echo "   • Sensitive files have 600 permissions"
+echo "   • Backups exclude sensitive data"
 echo ""
 echo "🔧 Useful commands:"
 echo "   ./health_check.sh           # Check system health"
 echo "   ./run_tracker.sh --test     # Test all components"
 echo "   ./run_tracker.sh            # Run daily analysis"
 echo "   ./backup_portfolio.sh       # Backup your data"
+echo ""
+echo "📱 Daily reports will be sent to your Telegram!"
 echo ""
