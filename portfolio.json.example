@@ -1,0 +1,20 @@
+{
+  "stocks": {
+    "AAPL": {
+      "shares": 10.5,
+      "avg_price": 150.00,
+      "total_invested": 1575.00,
+      "notes": "Tech holding"
+    },
+    "NVDA": {
+      "shares": 5.0,
+      "avg_price": 220.00,
+      "total_invested": 1100.00,
+      "notes": "AI/GPU play"
+    }
+  },
+  "settings": {
+    "benchmark": "VOO",
+    "currency": "USD"
+  }
+}

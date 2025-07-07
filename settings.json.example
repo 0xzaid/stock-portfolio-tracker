@@ -1,0 +1,18 @@
+{
+  "alerts": {
+    "price_threshold": 5,
+    "enable_recommendations": true,
+    "recommendation_strength": "moderate"
+  },
+  "technical_analysis": {
+    "rsi_period": 14,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "sma_short": 20,
+    "sma_long": 50
+  },
+  "news": {
+    "sentiment_threshold": 0.1,
+    "sources": ["alpha_vantage", "finnhub", "marketaux"]
+  }
+}

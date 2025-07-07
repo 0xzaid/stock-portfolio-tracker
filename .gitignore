@@ -1,0 +1,33 @@
+# Environment variables
+.env
+
+# Portfolio data
+portfolio.json
+settings.json
+
+# Data directory
+data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
