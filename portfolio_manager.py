@@ -11,7 +11,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from utils.config_loader import ConfigLoader
 from api_clients.alpha_vantage import AlphaVantageClient
 from api_clients.finnhub import FinnhubClient
+from api_clients.marketaux import MarketAuxClient
 from analyzers.portfolio_analyzer import PortfolioAnalyzer
+from analyzers.recommendation_engine import RecommendationEngine
 
 class PortfolioManager:
     def __init__(self):
@@ -22,13 +24,16 @@ class PortfolioManager:
         try:
             self.av_client = AlphaVantageClient()
             self.fh_client = FinnhubClient()
+            self.ma_client = MarketAuxClient()
             self.analyzer = PortfolioAnalyzer(self.av_client, self.fh_client)
+            self.recommendation_engine = RecommendationEngine(self.av_client, self.fh_client, self.ma_client)
             self.live_data_available = True
             print("✅ Connected to market data APIs")
         except Exception as e:
             print(f"⚠️ Live data unavailable: {e}")
             print("📊 Using static portfolio data only")
             self.analyzer = None
+            self.recommendation_engine = None
             self.live_data_available = False
     
     def show_portfolio(self):
@@ -488,6 +493,181 @@ class PortfolioManager:
         except Exception as e:
             print(f"❌ Price alert check failed: {e}")
     
+    def show_recommendations(self):
+        """Show AI-powered buy/sell/hold recommendations"""
+        if not self.live_data_available or not self.recommendation_engine:
+            print("\n❌ Recommendations unavailable - API connections failed")
+            print("💡 Check your .env.local file and API keys")
+            return
+        
+        stocks = self.portfolio.get('stocks', {})
+        if not stocks:
+            print("\n📊 No stocks in portfolio to analyze")
+            print("Add some stocks first to get recommendations!")
+            return
+        
+        print("\n🤖 AI Portfolio Recommendations")
+        print("=" * 60)
+        print("🔄 Analyzing technical indicators, news sentiment, and portfolio context...")
+        print("⏳ This may take a moment...")
+        
+        try:
+            # Generate comprehensive recommendations
+            recommendations = self.recommendation_engine.generate_portfolio_recommendations(self.portfolio)
+            
+            # Display prioritized actions first
+            priority_actions = recommendations['prioritized_actions']
+            if priority_actions:
+                print(f"\n🎯 TOP PRIORITY ACTIONS ({len(priority_actions)})")
+                print("=" * 50)
+                
+                for i, action in enumerate(priority_actions[:5], 1):  # Top 5 actions
+                    priority_icon = "🔥" if action['priority'] == 'high' else "⚠️" if action['priority'] == 'medium' else "💡"
+                    
+                    if action['type'] == 'stock_action':
+                        symbol = action['symbol']
+                        action_text = action['action']
+                        reasoning = action['reasoning']
+                        confidence = action.get('confidence', 0)
+                        
+                        print(f"{priority_icon} {i}. {action_text}: {symbol}")
+                        print(f"   Reason: {reasoning}")
+                        print(f"   Confidence: {confidence:.0%}")
+                    else:
+                        print(f"{priority_icon} {i}. {action['action']}")
+                        print(f"   Reason: {action['reason']}")
+                    print()
+            
+            # Display individual stock recommendations
+            stock_recs = recommendations['stock_recommendations']
+            if stock_recs:
+                print(f"\n📈 INDIVIDUAL STOCK ANALYSIS")
+                print("=" * 40)
+                
+                for symbol, rec in stock_recs.items():
+                    recommendation = rec['recommendation']
+                    context = rec['context']
+                    
+                    # Action icon
+                    if recommendation['action'] in ['STRONG BUY', 'BUY']:
+                        action_icon = "🟢"
+                    elif recommendation['action'] in ['STRONG SELL', 'SELL']:
+                        action_icon = "🔴"
+                    else:
+                        action_icon = "🟡"
+                    
+                    print(f"{action_icon} {symbol} - {recommendation['action']}")
+                    print(f"   Current: ${context['current_price']:.2f} (Cost: ${context['avg_cost']:.2f})")
+                    print(f"   Position: {context['position_weight']:.1f}% of portfolio ({context['current_gain_pct']:+.1f}%)")
+                    print(f"   Reasoning: {recommendation['reasoning']}")
+                    print(f"   Confidence: {recommendation['confidence']:.0%}")
+                    
+                    # Show technical summary if available
+                    tech_summary = rec.get('technical_summary', {})
+                    if tech_summary.get('available'):
+                        if tech_summary.get('rsi'):
+                            rsi_data = tech_summary['rsi']
+                            print(f"   📊 RSI: {rsi_data['value']:.0f} ({rsi_data['signal']})")
+                    
+                    # Show sentiment summary
+                    sent_summary = rec.get('sentiment_summary', {})
+                    if sent_summary.get('available') and sent_summary.get('news_count', 0) > 0:
+                        print(f"   📰 News Sentiment: {sent_summary['label'].title()} ({sent_summary['news_count']} articles)")
+                    
+                    # Show risk factors
+                    risks = rec.get('risk_factors', [])
+                    if risks:
+                        print(f"   ⚠️ Risks: {', '.join(risks[:2])}")  # Show top 2 risks
+                    
+                    print()
+            
+            # Portfolio overview
+            market_context = recommendations['market_context']
+            portfolio_recs = recommendations['portfolio_recommendations']
+            
+            print(f"\n📊 PORTFOLIO OVERVIEW")
+            print("=" * 30)
+            print(f"Total Value: ${market_context['portfolio_performance']['total_value']:.2f}")
+            print(f"Performance: {market_context['portfolio_performance']['total_return_pct']:+.1f}%")
+            print(f"Portfolio Health: {portfolio_recs['portfolio_health'].title()}")
+            print(f"Risk Level: {portfolio_recs['risk_level'].title()}")
+            
+            # Market sentiment
+            portfolio_sentiment = market_context['portfolio_sentiment']
+            market_sentiment = market_context['market_sentiment']
+            print(f"Portfolio Sentiment: {portfolio_sentiment.get('label', 'neutral').title()}")
+            print(f"Market Sentiment: {market_sentiment.get('label', 'neutral').title()}")
+            
+            print(f"\n🕐 Analysis completed at {recommendations['analysis_timestamp'][:16]}")
+            print("💡 Recommendations are based on technical analysis, news sentiment, and portfolio context")
+            
+        except Exception as e:
+            print(f"❌ Recommendation analysis failed: {e}")
+            print("💡 Try again in a few moments (API rate limits may apply)")
+    
+    def quick_sentiment_check(self):
+        """Quick sentiment analysis for portfolio stocks"""
+        if not self.live_data_available or not self.recommendation_engine:
+            print("\n❌ Sentiment analysis unavailable - API connections failed")
+            return
+        
+        stocks = self.portfolio.get('stocks', {})
+        if not stocks:
+            print("\n📊 No stocks in portfolio to analyze")
+            return
+        
+        print("\n📰 Portfolio News Sentiment")
+        print("=" * 35)
+        print("🔄 Analyzing recent news sentiment...")
+        
+        try:
+            sentiment_data = self.recommendation_engine.sentiment_analyzer.analyze_portfolio_sentiment(self.portfolio)
+            
+            # Overall portfolio sentiment
+            portfolio_sentiment = sentiment_data['portfolio_sentiment']
+            market_sentiment = sentiment_data['market_sentiment']
+            
+            print(f"\n📊 OVERALL SENTIMENT")
+            print("-" * 25)
+            print(f"Portfolio: {portfolio_sentiment.get('label', 'neutral').title()}")
+            print(f"Market: {market_sentiment.get('label', 'neutral').title()}")
+            
+            # Individual stock sentiments
+            stock_sentiments = sentiment_data['stock_sentiments']
+            if stock_sentiments:
+                print(f"\n📈 INDIVIDUAL STOCKS")
+                print("-" * 25)
+                
+                for symbol, sentiment in stock_sentiments.items():
+                    label = sentiment.get('sentiment_label', 'neutral')
+                    news_count = sentiment.get('news_count', 0)
+                    
+                    if label == 'positive':
+                        sentiment_icon = "🟢"
+                    elif label == 'negative':
+                        sentiment_icon = "🔴"
+                    else:
+                        sentiment_icon = "🟡"
+                    
+                    print(f"{sentiment_icon} {symbol}: {label.title()} ({news_count} articles)")
+                    
+                    # Show recent news headlines
+                    recent_news = sentiment.get('recent_news', [])
+                    if recent_news:
+                        print(f"   Latest: {recent_news[0]['title']}")
+            
+            # News highlights
+            highlights = sentiment_data.get('news_highlights', [])
+            if highlights:
+                print(f"\n📰 NEWS HIGHLIGHTS")
+                print("-" * 20)
+                for highlight in highlights[:3]:
+                    sentiment_icon = "🟢" if highlight['sentiment'] == 'positive' else "🔴"
+                    print(f"{sentiment_icon} {highlight['symbol']}: {highlight['title']}")
+            
+        except Exception as e:
+            print(f"❌ Sentiment analysis failed: {e}")
+    
     def refresh_portfolio_data(self):
         """Update portfolio JSON with current market prices"""
         if not self.live_data_available:
@@ -518,6 +698,30 @@ class PortfolioManager:
             
         except Exception as e:
             print(f"❌ Portfolio refresh failed: {e}")
+    
+    def update_cash(self):
+        current_cash = self.portfolio.get('cash', {}).get('available', 0)
+        print(f"\n💵 Update Cash Balance")
+        print("-" * 25)
+        print(f"Current cash: ${current_cash:.2f}")
+        
+        try:
+            new_cash_input = input(f"New cash balance (${current_cash:.2f}): ").strip()
+            new_cash = float(new_cash_input) if new_cash_input else current_cash
+            
+            if 'cash' not in self.portfolio:
+                self.portfolio['cash'] = {}
+            
+            self.portfolio['cash']['available'] = new_cash
+            self.portfolio['cash']['currency'] = 'USD'
+            
+            if self.config.save_portfolio(self.portfolio):
+                print(f"✅ Updated cash balance to ${new_cash:.2f}")
+            else:
+                print("❌ Failed to save portfolio")
+                
+        except ValueError:
+            print("❌ Invalid number format")
     
     def update_cash(self):
         """Update available cash balance"""
@@ -553,32 +757,35 @@ class PortfolioManager:
         if self.live_data_available:
             print("1. 📋 Show Portfolio")
             print("2. 🔍 Live Analysis")
-            print("3. 🚨 Price Alerts")
-            print("4. 🔄 Refresh Data")
-            print("5. ➕ Add Stock")
-            print("6. ➖ Remove Stock")
-            print("7. ✏️ Update Stock")
-            print("8. 💵 Update Cash")
-            print("9. 🚪 Exit")
+            print("3. 🤖 AI Recommendations")
+            print("4. 📰 Sentiment Check")
+            print("5. 🚨 Price Alerts")
+            print("6. 🔄 Refresh Data")
+            print("7. ➕ Add Stock")
+            print("8. ➖ Remove Stock")
+            print("9. ✏️ Update Stock")
+            print("10. 💵 Update Cash")
+            print("11. 🚪 Exit")
         else:
             print("1. 📋 Show Portfolio")
             print("2. ➕ Add Stock")
-            print("3. ➖ Remove Stock") 
+            print("3. ➖ Remove Stock")
             print("4. ✏️ Update Stock")
             print("5. 💵 Update Cash")
             print("6. 🚪 Exit")
-        print("-" * 50)
+        
+        print("-" * 30)
     
     def run(self):
         """Main CLI loop"""
-        print("🚀 Welcome to Portfolio Manager with Live Analytics!")
+        print("🚀 Welcome to Portfolio Manager with AI Recommendations!")
         
         while True:
             self.show_menu()
             
             if self.live_data_available:
-                choice = input("Enter your choice (1-9): ").strip()
-                max_choice = 9
+                choice = input("Enter your choice (1-11): ").strip()
+                max_choice = 11
             else:
                 choice = input("Enter your choice (1-6): ").strip()
                 max_choice = 6
@@ -592,30 +799,34 @@ class PortfolioManager:
                     self.add_stock()
             elif choice == '3':
                 if self.live_data_available:
-                    self.check_price_alerts()
+                    self.show_recommendations()
                 else:
                     self.remove_stock()
             elif choice == '4':
                 if self.live_data_available:
-                    self.refresh_portfolio_data()
+                    self.quick_sentiment_check()
                 else:
                     self.update_stock()
             elif choice == '5':
                 if self.live_data_available:
-                    self.add_stock()
+                    self.check_price_alerts()
                 else:
                     self.update_cash()
             elif choice == '6':
                 if self.live_data_available:
-                    self.remove_stock()
+                    self.refresh_portfolio_data()
                 else:
                     print("👋 Goodbye!")
                     break
             elif choice == '7' and self.live_data_available:
-                self.update_stock()
+                self.add_stock()
             elif choice == '8' and self.live_data_available:
-                self.update_cash()
+                self.remove_stock()
             elif choice == '9' and self.live_data_available:
+                self.update_stock()
+            elif choice == '10' and self.live_data_available:
+                self.update_cash()
+            elif choice == '11' and self.live_data_available:
                 print("👋 Goodbye!")
                 break
             else:
