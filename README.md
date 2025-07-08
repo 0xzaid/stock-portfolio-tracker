@@ -10,11 +10,37 @@ A comprehensive Python-based portfolio tracker that monitors your stock holdings
 - Automatic price updates and performance calculations
 - Cash balance management
 
-### 🤖 **AI-Powered Analysis**
-- **Technical Analysis**: RSI, MACD, SMA indicators
-- **News Sentiment**: Real-time news analysis for your stocks
-- **Smart Recommendations**: Buy/sell/hold decisions with confidence levels
-- **Risk Management**: Profit-taking and stop-loss alerts
+## 📚 Understanding Stock Analysis Terms
+
+New to investing? Here's what the AI recommendations mean:
+
+### **Technical Indicators**
+- **RSI (Relative Strength Index)**: Measures if a stock is overbought (>70, maybe sell) or oversold (<30, maybe buy)
+- **MACD (Moving Average Convergence Divergence)**: Shows momentum changes - crossovers indicate potential buy/sell signals
+- **SMA (Simple Moving Average)**: Average price over X days - when short-term crosses above long-term, it's bullish
+
+### **Portfolio Terms**
+- **P&L (Profit & Loss)**: How much money you've made (+) or lost (-)
+- **Benchmark**: What you compare performance against (like S&P 500)
+- **Volatility**: How much prices swing up and down (higher = more risky)
+
+### **Market Sentiment**
+- **Bullish** 🐂: Optimistic, expecting prices to rise
+- **Bearish** 🐻: Pessimistic, expecting prices to fall
+- **Position**: Your ownership in a specific stock
+
+### **AI Recommendation Examples**
+- *"NVDA oversold (RSI: 25) - potential buy opportunity"*
+- *"TSLA showing bullish MACD crossover - upward momentum"*
+- *"Portfolio up 12% vs S&P 500 +8% - outperforming market"*
+
+## 🔧 Advanced Features
+
+### **AI Recommendation Logic**
+- **Technical Signals**: RSI oversold/overbought, MACD crossovers, SMA trends
+- **Sentiment Signals**: News analysis, earnings reactions, analyst upgrades
+- **Risk Management**: Profit-taking at +20%, stop-loss at -10%
+- **Portfolio Context**: Position sizing, concentration limits, cash management
 
 ### 📱 **Telegram Integration**
 - Daily portfolio reports sent to your phone
@@ -256,19 +282,3 @@ python daily_tracker.py --test
 - Portfolio data in local JSON files
 - No sensitive data transmitted
 - Telegram bot uses secure HTTPS
-
-## 🤝 Contributing
-
-This is a personal portfolio tracker, but you can:
-1. Fork the repository
-2. Customize for your needs
-3. Add new indicators or analysis
-4. Improve error handling
-
-## 📝 License
-
-Personal use project - customize as needed for your portfolio!
-
----
-
-**🎉 Happy Investing!** Your AI-powered portfolio tracker is ready to help you make smarter investment decisions with automated daily insights delivered right to your phone.
