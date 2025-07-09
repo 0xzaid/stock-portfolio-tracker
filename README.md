@@ -91,7 +91,7 @@ stock-portfolio-tracker/
 
 ### 1. **Clone & Setup**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/0xzaid/stock-portfolio-tracker.git
 cd stock-portfolio-tracker
 pip install -r requirements.txt
 ```
